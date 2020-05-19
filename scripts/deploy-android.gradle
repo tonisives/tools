@@ -1,7 +1,7 @@
 if (project.hasProperty("hmArtifactoryUrl") && project.hasProperty('releaseType') && project.releaseType > 0) {
     // doesn't look like can include buildscript.
     // https://discuss.gradle.org/t/how-do-i-include-buildscript-block-from-external-gradle-script/7016/2
-
+// test
     apply plugin: "maven"
     apply plugin: "com.jfrog.artifactory"
     apply plugin: 'com.jfrog.bintray'
