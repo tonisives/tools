@@ -21,6 +21,9 @@ if (project.hasProperty("hmArtifactoryUrl") && (project.hasProperty('releaseType
     apply plugin: 'maven-publish'
     apply plugin: "com.jfrog.artifactory"
     apply plugin: 'com.jfrog.bintray'
+    
+    def deploy = new Properties()
+    deploy.load(new FileInputStream("$projectDir/deploy.settings"))
 
     task sourceJar(type: Jar) {
         from android.sourceSets.main.java.srcDirs
