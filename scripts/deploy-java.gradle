@@ -1,3 +1,22 @@
+/*
+includes both artifactory and bintray upload tasks.
+
+deploy.settings configuration file is required and it's properties loaded into 'deploy' variable:
+
+def deploy = new Properties()
+deploy.load(new FileInputStream("$projectDir/deploy.settings"))
+
+deploy.settings:
+
+siteUrl = https://github.com...
+gitUrl = https://github.com...
+version = test
+groupId = com.company
+licenses = MIT
+id = libName
+repo = gradle-dev-local
+*/
+
 if (project.hasProperty("hmArtifactoryUrl") && project.hasProperty('releaseType') && project.releaseType > 0) {
     apply plugin: "maven"
     apply plugin: "com.jfrog.artifactory"
