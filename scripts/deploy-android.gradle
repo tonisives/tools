@@ -1,26 +1,53 @@
-if (project.hasProperty("hmArtifactoryUrl") && project.hasProperty('releaseType') && project.releaseType > 0) {
-    // doesn't look like can include buildscript.
-    // https://discuss.gradle.org/t/how-do-i-include-buildscript-block-from-external-gradle-script/7016/2
+/*
+includes both artifactory and bintray upload tasks.
 
-    apply plugin: "maven"
+deploy.settings configuration file is required and it's properties loaded into 'deploy' variable:
+
+def deploy = new Properties()
+deploy.load(new FileInputStream("$projectDir/deploy.settings"))
+
+deploy.settings:
+
+siteUrl = https://github.com...
+gitUrl = https://github.com...
+version = test
+groupId = com.company
+licenses = MIT
+id = libName
+repo = gradle-dev-local
+*/
+
+if (project.hasProperty("hmArtifactoryUrl") && (project.hasProperty('releaseType') == false || project.releaseType > 0)) {
+    apply plugin: 'maven-publish'
     apply plugin: "com.jfrog.artifactory"
     apply plugin: 'com.jfrog.bintray'
-    apply plugin: 'digital.wup.android-maven-publish'
 
-    def artifact = new Properties()
-    artifact.load(new FileInputStream("$projectDir/deploy.settings"))
-
-    task sourcesJar(type: Jar) {
-        archiveClassifier.set('sources')
+    task sourceJar(type: Jar) {
         from android.sourceSets.main.java.srcDirs
+        classifier "sources"
     }
 
     publishing {
         publications {
             aar(MavenPublication) {
-                from components.android
-                groupId artifact.groupId
-                // for bintray: https://github.com/bintray/gradle-bintray-plugin
+                groupId deploy.groupId
+                artifactId deploy.id
+                version deploy.version
+                artifact(sourceJar)
+                artifact("$buildDir/outputs/aar/${deploy.id}-release.aar")
+
+                // needed for .aar transitive dependencies
+                pom.withXml {
+                    def dependenciesNode = asNode()['dependencies'][0] ?: asNode().appendNode('dependencies')
+                    configurations.implementation.allDependencies.each {
+                        if (it.name != 'unspecified') {
+                            def dependencyNode = dependenciesNode.appendNode('dependency')
+                            dependencyNode.appendNode('groupId', it.group)
+                            dependencyNode.appendNode('artifactId', it.name)
+                            dependencyNode.appendNode('version', it.version)
+                        }
+                    }
+                }
             }
         }
     }
@@ -31,7 +58,7 @@ if (project.hasProperty("hmArtifactoryUrl") && project.hasProperty('releaseType'
 
         publish {
             repository {
-                repoKey = project.hasProperty("repo") ? project.property("repo") : artifact.repo
+                repoKey = project.hasProperty("repo") ? project.property("repo") : deploy.repo
                 username = hmArtifactoryPublishUser
                 password = hmArtifactoryPublishPassword
                 maven = true
@@ -42,6 +69,24 @@ if (project.hasProperty("hmArtifactoryUrl") && project.hasProperty('releaseType'
                 publications('aar')
                 publishIvy = false
                 publishPom = true
+            }
+        }
+    }
+
+    bintray {
+        user = hmBintrayUser
+        key = hmBintrayApikey
+
+        publications = ['aar']
+        pkg {
+            repo = "maven"
+            name = deploy.id
+            websiteUrl = deploy.siteUrl
+            vcsUrl = deploy.gitUrl
+            licenses = deploy.licenses.split(',')
+
+            version {
+                name = deploy.version
             }
         }
     }
