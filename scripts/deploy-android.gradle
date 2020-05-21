@@ -9,9 +9,19 @@ version = test
 groupId = com.company
 licenses = MIT
 id = libName
+
+also, ~/.gradle/gradle.properties needs to define
+
+devReadUser=
+devReadPassword=
+hmBintrayUser=
+hmBintrayApikey=
+hmArtifactoryPublishUser=
+hmArtifactoryPublishPassword=
+hmArtifactoryUrl=
 */
 
-if (project.hasProperty("hmArtifactoryUrl") && (project.hasProperty('releaseType') == false || project.releaseType > 0)) {
+if (project.hasProperty("hmArtifactoryUrl")) {
     apply plugin: 'maven-publish'
     apply plugin: "com.jfrog.artifactory"
     apply plugin: 'com.jfrog.bintray'
