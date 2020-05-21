@@ -9,7 +9,6 @@ version = test
 groupId = com.company
 licenses = MIT
 id = libName
-repo = gradle-dev-local
 */
 
 if (project.hasProperty("hmArtifactoryUrl") && (project.hasProperty('releaseType') == false || project.releaseType > 0)) {
@@ -19,6 +18,11 @@ if (project.hasProperty("hmArtifactoryUrl") && (project.hasProperty('releaseType
 
     def deploy = new Properties()
     deploy.load(new FileInputStream("$projectDir/deploy.settings"))
+
+    task artifactoryPublishDev {
+        ext.repo = "gradle-dev-local"
+        artifactoryPublish
+    }
 
     task sourceJar(type: Jar) {
         from android.sourceSets.main.java.srcDirs
@@ -56,7 +60,8 @@ if (project.hasProperty("hmArtifactoryUrl") && (project.hasProperty('releaseType
 
         publish {
             repository {
-                repoKey = project.hasProperty("repo") ? project.property("repo") : deploy.repo
+                // set repo with ./gradlew artifactoryPublish -Prepo=gradle-dev-local OR gradle-release-local
+                repoKey = project.hasProperty('repo') ? project.repo : "gradle-dev-local"
                 username = hmArtifactoryPublishUser
                 password = hmArtifactoryPublishPassword
                 maven = true
