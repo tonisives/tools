@@ -1,29 +1,33 @@
 /*
 includes both artifactory and bintray upload tasks.
-
-deploy.settings configuration file is required and it's properties loaded into 'deploy' variable:
-
-def deploy = new Properties()
-deploy.load(new FileInputStream("$projectDir/deploy.settings"))
+deploy.settings configuration file is in the projectDir:
 
 deploy.settings:
-
 siteUrl = https://github.com...
 gitUrl = https://github.com...
 version = test
 groupId = com.company
 licenses = MIT
 id = libName
-repo = gradle-dev-local
+
+also, ~/.gradle/gradle.properties needs to define
+
+devReadUser=
+devReadPassword=
+hmBintrayUser=
+hmBintrayApikey=
+hmArtifactoryPublishUser=
+hmArtifactoryPublishPassword=
+hmArtifactoryUrl=
 */
 
-if (project.hasProperty("hmArtifactoryUrl") && project.hasProperty('releaseType') && project.releaseType > 0) {
+if (project.hasProperty("hmArtifactoryUrl")) {
     apply plugin: "maven"
     apply plugin: "com.jfrog.artifactory"
     apply plugin: 'com.jfrog.bintray'
 
-    def artifact = new Properties()
-    artifact.load(new FileInputStream("$projectDir/deploy.settings"))
+    def deploy = new Properties()
+    deploy.load(new FileInputStream("$projectDir/deploy.settings"))
 
     // add the sources and doc artifacts
 
@@ -48,7 +52,8 @@ if (project.hasProperty("hmArtifactoryUrl") && project.hasProperty('releaseType'
 
         publish {
             repository {
-                repoKey = project.hasProperty("repo") ? project.property("repo") : artifact.repo
+                // set repo with ./gradlew artifactoryPublish -Prepo=gradle-dev-local OR gradle-release-local
+                repoKey = project.hasProperty('repo') ? project.repo : "gradle-dev-local"
                 username = hmArtifactoryPublishUser
                 password = hmArtifactoryPublishPassword
             }
@@ -65,23 +70,23 @@ if (project.hasProperty("hmArtifactoryUrl") && project.hasProperty('releaseType'
         repositories.mavenInstaller {
             pom.project {
                 packaging 'jar'
-                groupId artifact.groupId
-                artifactId artifact.id
-                version artifact.version
-                name artifact.id // pom.project.name must be same as bintray.pkg.name
-                url artifact.siteUrl
+                groupId deploy.groupId
+                artifactId deploy.id
+                version deploy.version
+                name deploy.id
+                url deploy.siteUrl
                 inceptionYear '2018'
                 licenses {
-                    license { // HARDCODED
+                    license {
                         name 'MIT'
                         url 'https://opensource.org/licenses/MIT'
                         distribution 'repo'
                     }
                 }
                 scm {
-                    connection artifact.gitUrl
-                    developerConnection artifact.gitUrl
-                    url artifact.siteUrl
+                    connection deploy.gitUrl
+                    developerConnection deploy.gitUrl
+                    url deploy.siteUrl
                 }
             }
         }
@@ -94,13 +99,13 @@ if (project.hasProperty("hmArtifactoryUrl") && project.hasProperty('releaseType'
         configurations = ['archives']
         pkg {
             repo = "maven"
-            name = artifact.id
-            websiteUrl = artifact.siteUrl
-            vcsUrl = artifact.gitUrl
-            licenses = artifact.licenses
+            name = deploy.id
+            websiteUrl = deploy.siteUrl
+            vcsUrl = deploy.gitUrl
+            licenses = deploy.licenses
 
             version {
-                name = artifact.version
+                name = deploy.version
             }
         }
     }
