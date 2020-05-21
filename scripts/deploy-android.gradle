@@ -1,13 +1,8 @@
 /*
 includes both artifactory and bintray upload tasks.
-
-deploy.settings configuration file is required and it's properties loaded into 'deploy' variable:
-
-def deploy = new Properties()
-deploy.load(new FileInputStream("$projectDir/deploy.settings"))
+deploy.settings configuration file is in the projectDir:
 
 deploy.settings:
-
 siteUrl = https://github.com...
 gitUrl = https://github.com...
 version = test
@@ -21,6 +16,9 @@ if (project.hasProperty("hmArtifactoryUrl") && (project.hasProperty('releaseType
     apply plugin: 'maven-publish'
     apply plugin: "com.jfrog.artifactory"
     apply plugin: 'com.jfrog.bintray'
+
+    def deploy = new Properties()
+    deploy.load(new FileInputStream("$projectDir/deploy.settings"))
 
     task sourceJar(type: Jar) {
         from android.sourceSets.main.java.srcDirs
