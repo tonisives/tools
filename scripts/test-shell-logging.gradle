@@ -7,9 +7,7 @@ tasks.withType(Test) {
     testLogging {
         // set options for log level LIFECYCLE
         events TestLogEvent.FAILED,
-                /*TestLogEvent.PASSED,*/
-                TestLogEvent.SKIPPED,
-                TestLogEvent.STANDARD_OUT
+                TestLogEvent.SKIPPED
         exceptionFormat TestExceptionFormat.FULL
         showExceptions true
         showCauses true
@@ -17,12 +15,9 @@ tasks.withType(Test) {
 
         // set options for log level DEBUG and INFO
         debug {
-            events TestLogEvent.STARTED,
-                    TestLogEvent.FAILED,
-                    TestLogEvent.PASSED,
+            events TestLogEvent.FAILED,
                     TestLogEvent.SKIPPED,
-                    TestLogEvent.STANDARD_ERROR,
-                    TestLogEvent.STANDARD_OUT
+                    TestLogEvent.STANDARD_ERROR
             exceptionFormat TestExceptionFormat.FULL
         }
         info.events = debug.events
