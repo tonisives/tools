@@ -1,12 +1,10 @@
-test {
-    useJUnitPlatform()
-    outputs.upToDateWhen { false }
-}
-
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.gradle.api.tasks.testing.logging.TestLogEvent
 
 tasks.withType(Test) {
+    useJUnitPlatform()
+    outputs.upToDateWhen { false }
+
     testLogging {
         // set options for log level LIFECYCLE
         events TestLogEvent.FAILED,
