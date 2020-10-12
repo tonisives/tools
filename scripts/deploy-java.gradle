@@ -29,8 +29,10 @@ if (project.hasProperty("hmArtifactoryUrl")) {
     def deploy = new Properties()
     deploy.load(new FileInputStream("$projectDir/deploy.settings"))
 
-    // add the sources and doc artifacts
+    // override version if has CL property, otherwise take from deploy.settings
+    def deployVersion = project.hasProperty('version') ? project.version : deploy.version
 
+    // add the sources and doc artifacts
     task sourcesJar(type: Jar) {
         from sourceSets.main.java.srcDirs
         classifier = 'sources'
@@ -72,7 +74,7 @@ if (project.hasProperty("hmArtifactoryUrl")) {
                 packaging 'jar'
                 groupId deploy.groupId
                 artifactId deploy.id
-                version deploy.version
+                version deployVersion
                 name deploy.id
                 url deploy.siteUrl
                 inceptionYear '2018'
@@ -105,7 +107,7 @@ if (project.hasProperty("hmArtifactoryUrl")) {
             licenses = deploy.licenses
 
             version {
-                name = deploy.version
+                name = deployVersion
             }
         }
     }
