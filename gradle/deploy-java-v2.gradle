@@ -24,6 +24,7 @@ hmArtifactoryUrl=
 
 if (project.hasProperty("hmArtifactoryUrl")) {
     apply plugin: "maven-publish"
+    apply plugin: 'com.jfrog.bintray'
 
     def deploy = new Properties()
     deploy.load(new FileInputStream("$projectDir/deploy.settings"))
@@ -76,48 +77,21 @@ if (project.hasProperty("hmArtifactoryUrl")) {
         }
     }
 
-    /*// bintray
-    install {
-        repositories.mavenInstaller {
-            pom.project {
-                packaging 'jar'
-                groupId deploy.groupId
-                artifactId deploy.id
-                version deployVersion
-                name deploy.id
-                url deploy.siteUrl
-                inceptionYear '2018'
-                licenses {
-                    license {
-                        name 'MIT'
-                        url 'https://opensource.org/licenses/MIT'
-                        distribution 'repo'
-                    }
-                }
-                scm {
-                    connection deploy.gitUrl
-                    developerConnection deploy.gitUrl
-                    url deploy.siteUrl
-                }
-            }
-        }
-    }
-
     bintray {
         user = hmBintrayUser
         key = hmBintrayApikey
 
-        configurations = ['archives']
+        publications = ['mavenJava']
         pkg {
             repo = "maven"
             name = deploy.id
             websiteUrl = deploy.siteUrl
             vcsUrl = deploy.gitUrl
-            licenses = deploy.licenses
+            licenses = deploy.licenseName
 
             version {
                 name = deployVersion
             }
         }
-    }*/
+    }
 }
