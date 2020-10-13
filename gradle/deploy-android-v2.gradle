@@ -1,0 +1,111 @@
+/*
+includes both artifactory and bintray upload tasks.
+deploy.settings configuration file is in the projectDir:
+
+deploy.settings:
+siteUrl = https://github.com...
+gitUrl = https://github.com...
+version = 1.0
+groupId = com.company
+id = libName
+licenseName = MIT
+licenseUrl = https://opensource.org/licenses/MIT
+
+also, ~/.gradle/gradle.properties needs to define
+
+devReadUser=
+devReadPassword=
+hmBintrayUser=
+hmBintrayApikey=
+hmArtifactoryPublishUser=
+hmArtifactoryPublishPassword=
+hmArtifactoryUrl=
+*/
+
+if (project.hasProperty("hmArtifactoryUrl")) {
+    task sourceJar(type: Jar) {
+        from android.sourceSets.main.java.srcDirs
+        classifier "sources"
+    }
+
+    apply plugin: "maven-publish"
+    apply plugin: 'com.jfrog.bintray'
+
+    def deploy = new Properties()
+    deploy.load(new FileInputStream("$projectDir/deploy.settings"))
+
+    // override version if has CL property, otherwise take from deploy.settings
+    def deployVersion = project.hasProperty('version') ? project.version : deploy.version
+
+    publishing {
+        repositories {
+            maven {
+                name = 'artifactory'
+                def repoKey = project.hasProperty('repo') ? project.repo : "gradle-dev-local"
+                url = "$hmArtifactoryUrl/$repoKey"
+                credentials {
+                    username hmArtifactoryPublishUser
+                    password hmArtifactoryPublishPassword
+                }
+            }
+        }
+        
+        publications {
+            aar(MavenPublication) {
+                artifact(sourceJar)
+                artifact("$buildDir/outputs/aar/${deploy.id}-release.aar")
+
+                pom {
+                    groupId = deploy.groupId
+                    artifactId = deploy.id
+                    version = deployVersion
+                    name = deploy.id
+                    url = deploy.siteUrl
+                    inceptionYear = '2018'
+                    licenses { 
+                        license {
+                            name = deploy.licenseName
+                            url = deploy.licenseUrl
+                        }
+                    }
+                    scm {
+                        connection = deploy.gitUrl
+                        developerConnection = deploy.gitUrl
+                        url = deploy.siteUrl
+                    }
+                }
+
+                // needed for .aar transitive dependencies
+                pom.withXml {
+                    def dependenciesNode = asNode()['dependencies'][0] ?: asNode().appendNode('dependencies')
+                    configurations.implementation.allDependencies.each {
+                        if (it.name != 'unspecified') {
+                            def dependencyNode = dependenciesNode.appendNode('dependency')
+                            dependencyNode.appendNode('groupId', it.group)
+                            dependencyNode.appendNode('artifactId', it.name)
+                            dependencyNode.appendNode('version', it.version)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    bintray {
+        user = hmBintrayUser
+        key = hmBintrayApikey
+
+        publications = ['aar']
+        pkg {
+            repo = "maven"
+            name = deploy.id
+            websiteUrl = deploy.siteUrl
+            vcsUrl = deploy.gitUrl
+            licenses = deploy.licenseName
+
+            version {
+                name = deployVersion
+            }
+        }
+    }
+}
