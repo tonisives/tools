@@ -1,0 +1,123 @@
+/*
+includes both artifactory and bintray upload tasks.
+deploy.settings configuration file is in the projectDir:
+
+deploy.settings:
+siteUrl = https://github.com...
+gitUrl = https://github.com...
+version = 1.0
+groupId = com.company
+id = libName
+licenseName = MIT
+licenseUrl = https://opensource.org/licenses/MIT
+
+also, ~/.gradle/gradle.properties needs to define
+
+devReadUser=
+devReadPassword=
+hmBintrayUser=
+hmBintrayApikey=
+hmArtifactoryPublishUser=
+hmArtifactoryPublishPassword=
+hmArtifactoryUrl=
+*/
+
+if (project.hasProperty("hmArtifactoryUrl")) {
+    apply plugin: "maven-publish"
+
+    def deploy = new Properties()
+    deploy.load(new FileInputStream("$projectDir/deploy.settings"))
+
+    // override version if has CL property, otherwise take from deploy.settings
+    def deployVersion = project.hasProperty('version') ? project.version : deploy.version
+
+    java {
+        withJavadocJar()
+        withSourcesJar()
+    }
+
+    publishing {
+        repositories {
+            maven {
+                name = 'artifactory'
+                def repoKey = project.hasProperty('repo') ? project.repo : "gradle-dev-local"
+                url = "$hmArtifactoryUrl/$repoKey"
+                credentials {
+                    username hmArtifactoryPublishUser
+                    password hmArtifactoryPublishPassword
+                }
+            }
+        }
+        
+        publications {
+            mavenJava(MavenPublication) {
+                from components.java
+
+                 pom {
+                    groupId = deploy.groupId
+                    artifactId = deploy.id
+                    version = deployVersion
+                    name = deploy.id
+                    url = deploy.siteUrl
+                    inceptionYear = '2018'
+                    licenses { 
+                        license {
+                            name = deploy.licenseName
+                            url = deploy.licenseUrl
+                        }
+                    }
+                    scm {
+                        connection = deploy.gitUrl
+                        developerConnection = deploy.gitUrl
+                        url = deploy.siteUrl
+                    }
+                }
+            }
+        }
+    }
+
+    /*// bintray
+    install {
+        repositories.mavenInstaller {
+            pom.project {
+                packaging 'jar'
+                groupId deploy.groupId
+                artifactId deploy.id
+                version deployVersion
+                name deploy.id
+                url deploy.siteUrl
+                inceptionYear '2018'
+                licenses {
+                    license {
+                        name 'MIT'
+                        url 'https://opensource.org/licenses/MIT'
+                        distribution 'repo'
+                    }
+                }
+                scm {
+                    connection deploy.gitUrl
+                    developerConnection deploy.gitUrl
+                    url deploy.siteUrl
+                }
+            }
+        }
+    }
+
+    bintray {
+        user = hmBintrayUser
+        key = hmBintrayApikey
+
+        configurations = ['archives']
+        pkg {
+            repo = "maven"
+            name = deploy.id
+            websiteUrl = deploy.siteUrl
+            vcsUrl = deploy.gitUrl
+            licenses = deploy.licenses
+
+            version {
+                name = deployVersion
+            }
+        }
+    }*/
+}

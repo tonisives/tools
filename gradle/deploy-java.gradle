@@ -1,0 +1,114 @@
+/*
+includes both artifactory and bintray upload tasks.
+deploy.settings configuration file is in the projectDir:
+
+deploy.settings:
+siteUrl = https://github.com...
+gitUrl = https://github.com...
+version = test
+groupId = com.company
+licenses = MIT
+id = libName
+
+also, ~/.gradle/gradle.properties needs to define
+
+devReadUser=
+devReadPassword=
+hmBintrayUser=
+hmBintrayApikey=
+hmArtifactoryPublishUser=
+hmArtifactoryPublishPassword=
+hmArtifactoryUrl=
+*/
+
+if (project.hasProperty("hmArtifactoryUrl")) {
+    apply plugin: "maven"
+    apply plugin: "com.jfrog.artifactory"
+    apply plugin: 'com.jfrog.bintray'
+
+    def deploy = new Properties()
+    deploy.load(new FileInputStream("$projectDir/deploy.settings"))
+
+    // override version if has CL property, otherwise take from deploy.settings
+    def deployVersion = project.hasProperty('version') ? project.version : deploy.version
+
+    // add the sources and doc artifacts
+    task sourcesJar(type: Jar) {
+        from sourceSets.main.java.srcDirs
+        classifier = 'sources'
+    }
+
+    task javadocJar(type: Jar, dependsOn: javadoc) {
+        from javadoc.destinationDir
+        classifier = 'javadoc'
+    }
+
+    artifacts {
+        archives javadocJar
+        archives sourcesJar
+    }
+
+    // artifactory
+    artifactory {
+        contextUrl = hmArtifactoryUrl
+
+        publish {
+            repository {
+                // set repo with ./gradlew artifactoryPublish -Prepo=gradle-dev-local OR gradle-release-local
+                repoKey = project.hasProperty('repo') ? project.repo : "gradle-dev-local"
+                username = hmArtifactoryPublishUser
+                password = hmArtifactoryPublishPassword
+            }
+
+            defaults {
+                publishConfigs('archives', 'published')
+                publishIvy = false
+            }
+        }
+    }
+
+    // bintray
+    install {
+        repositories.mavenInstaller {
+            pom.project {
+                packaging 'jar'
+                groupId deploy.groupId
+                artifactId deploy.id
+                version deployVersion
+                name deploy.id
+                url deploy.siteUrl
+                inceptionYear '2018'
+                licenses {
+                    license {
+                        name 'MIT'
+                        url 'https://opensource.org/licenses/MIT'
+                        distribution 'repo'
+                    }
+                }
+                scm {
+                    connection deploy.gitUrl
+                    developerConnection deploy.gitUrl
+                    url deploy.siteUrl
+                }
+            }
+        }
+    }
+
+    bintray {
+        user = hmBintrayUser
+        key = hmBintrayApikey
+
+        configurations = ['archives']
+        pkg {
+            repo = "maven"
+            name = deploy.id
+            websiteUrl = deploy.siteUrl
+            vcsUrl = deploy.gitUrl
+            licenses = deploy.licenses
+
+            version {
+                name = deployVersion
+            }
+        }
+    }
+}

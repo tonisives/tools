@@ -1,0 +1,5 @@
+apply from: "https://raw.githubusercontent.com/tonisives/tools/master/scripts/test-shell-logging.gradle"
+
+tasks.withType(Test) {
+    useJUnitPlatform()
+}
