@@ -5,7 +5,6 @@ deploy.settings configuration file is in the projectDir:
 deploy.settings:
 siteUrl = https://github.com...
 gitUrl = https://github.com...
-version = 1.0
 groupId = com.company
 id = libName
 licenseName = MIT
@@ -20,6 +19,8 @@ hmBintrayApikey=
 hmArtifactoryPublishUser=
 hmArtifactoryPublishPassword=
 hmArtifactoryUrl=
+
+also, ext.ver."$deploy.id" or "version" needs to be defined in a build.gradle
 */
 
 if (project.hasProperty("hmArtifactoryUrl")) {
@@ -29,8 +30,8 @@ if (project.hasProperty("hmArtifactoryUrl")) {
     def deploy = new Properties()
     deploy.load(new FileInputStream("$projectDir/deploy.settings"))
 
-    // override version if has CL property, otherwise take from deploy.settings
-    def deployVersion = project.hasProperty('version') ? project.version : deploy.version
+    // use either ver."$deploy.id" or version
+    def deployVersion = ver."$deploy.id" ?: project.version
 
     java {
         withJavadocJar()
