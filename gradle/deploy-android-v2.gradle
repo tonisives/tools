@@ -1,26 +1,31 @@
 /*
 includes both artifactory and bintray upload tasks.
-deploy.settings configuration file is in the projectDir:
 
-deploy.settings:
-siteUrl = https://github.com...
-gitUrl = https://github.com...
-groupId = com.company
-id = libName
-licenseName = MIT
-licenseUrl = https://opensource.org/licenses/MIT
+requirements
+* deploy.gradle file in the projectDir:
 
-also, ~/.gradle/gradle.properties needs to define
+    ext.deploy = [
+        "siteUrl"           : "site url",
+        "gitUrl"            : "git url",
+        "groupId"           : "package name",
+        "licenseName"       : "MIT",
+        "licenseUrl"        : "https ://opensource.org/licenses/MIT",
+        "id"                : "the package id"
+    ]
 
-devReadUser=
-devReadPassword=
-hmBintrayUser=
-hmBintrayApikey=
-hmArtifactoryPublishUser=
-hmArtifactoryPublishPassword=
-hmArtifactoryUrl=
+    it should be loaded with: apply from: "deploy.gradle"
 
-also, ext.ver."$deploy.id" or "version" needs to be defined in a build.gradle
+* defined ext.ver."$deploy.id" or "version"
+eg version = 1.0
+
+* ~/.gradle/gradle.properties file with repo credentials
+    devReadUser=
+    devReadPassword=
+    hmBintrayUser=
+    hmBintrayApikey=
+    hmArtifactoryPublishUser=
+    hmArtifactoryPublishPassword=
+    hmArtifactoryUrl=
 */
 
 if (project.hasProperty("hmArtifactoryUrl")) {
@@ -32,11 +37,9 @@ if (project.hasProperty("hmArtifactoryUrl")) {
     apply plugin: "maven-publish"
     apply plugin: 'com.jfrog.bintray'
 
-    def deploy = new Properties()
-    deploy.load(new FileInputStream("$projectDir/deploy.settings"))
-
     // use either ver."$deploy.id" or version
-    def deployVersion = ver."$deploy.id" ?: project.version
+    def deployVersion = ver."$deploy.id"
+    if (deployVersion == null) deployVersion = project.version
 
     publishing {
         repositories {
@@ -50,7 +53,7 @@ if (project.hasProperty("hmArtifactoryUrl")) {
                 }
             }
         }
-        
+
         publications {
             aar(MavenPublication) {
                 artifact(sourceJar)
@@ -63,7 +66,7 @@ if (project.hasProperty("hmArtifactoryUrl")) {
                     name = deploy.id
                     url = deploy.siteUrl
                     inceptionYear = '2018'
-                    licenses { 
+                    licenses {
                         license {
                             name = deploy.licenseName
                             url = deploy.licenseUrl
