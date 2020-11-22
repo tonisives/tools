@@ -14,3 +14,7 @@ git add . && git commit -m "${COMMIT_MESSAGE}" || :
 
 # reset reset
 # git submodule foreach --recursive "git reset --soft HEAD~1 || :" | tail -r
+
+# git submodule foreach "git push origin HEAD" 
+# git submodule foreach "git push origin HEAD"
+# git push origin HEAD
