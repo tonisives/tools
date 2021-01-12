@@ -99,3 +99,6 @@ if (project.hasProperty("hmArtifactoryUrl")) {
         }
     }
 }
+else {
+    println("Credentials don't exist for publishing")
+}
