@@ -41,6 +41,12 @@ if (project.hasProperty("hmArtifactoryUrl")) {
     def deployVersion = ver."$deploy.id"
     if (deployVersion == null) deployVersion = project.version
 
+    // use release dependencies
+    def runTasks = gradle.startParameter.taskNames.toString()
+    if (runTasks.contains("publish") || runTasks.contains("bintrayUpload")) {
+        project.rootProject.ext.setProperty("depLocation", 1)
+    }
+    
     publishing {
         repositories {
             maven {
