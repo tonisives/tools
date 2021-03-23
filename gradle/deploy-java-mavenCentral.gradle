@@ -34,8 +34,8 @@ hmArtifactoryPublishPassword=
 * update ext.ver values in *all* build.gradle or use -Pversion property
 
 * Call `./gradlew publishReleasePublicationToMavenCentralRepository` to publish to MavenCentral
-* Call `./gradlew publishReleasePublicationToArtifactoryRepository` to publish to dev Artifactory
-add -Prepo=gradle-dev-local to release to dev repo
+* Call `./gradlew publishReleasePublicationToArtifactoryRepository` to publish to release Artifactory
+add -Prepo=gradle-dev-local to dev repo
 
 * Call `./gradlew publish` to release to both MavenCentral and Artifactory
 */
@@ -53,6 +53,8 @@ if (project.hasProperty("mavenSigningKeyId")) {
     publishing {
         publications {
             release(MavenPublication) {
+                from components.java
+
                 // use either ver."$deploy.id" or version
                 def deployVersion = ver."$deploy.id"
                 if (deployVersion == null) deployVersion = project.version
@@ -66,10 +68,6 @@ if (project.hasProperty("mavenSigningKeyId")) {
                 groupId = deploy.groupId
                 artifactId = deploy.id
                 version = deployVersion
-
-                artifacts {
-                    archives javadocJar, sourcesJar
-                }
 
                 pom {
                     name = deploy.id
@@ -101,7 +99,7 @@ if (project.hasProperty("mavenSigningKeyId")) {
         repositories {
             maven {
                 name = 'artifactory'
-                def repoKey = project.hasProperty('repo') ? project.repo : "gradle-dev-local"
+                def repoKey = project.hasProperty('repo') ? project.repo : "gradle-release-local"
                 url = "$hmArtifactoryUrl/$repoKey"
                 credentials {
                     username hmArtifactoryPublishUser
