@@ -86,6 +86,11 @@ if (project.hasProperty("mavenSigningKeyId")) {
                             name = 'Tonis Tiganik'
                             email = 'ttiganik@high-mobility.com'
                         }
+                        developer {
+                            id = 'kevin'
+                            name = 'Kevin Valdek'
+                            email = 'kevin@high-mobility.com'
+                        }
                     }
                     scm {
                         connection = deploy.gitUrl
