@@ -39,7 +39,7 @@ if (project.hasProperty("mavenSigningKeyId")) {
     apply from: "$projectDir/deploy.gradle"
 
     // 
-    // tasks.withType(PublishToMavenRepository) { it.dependsOn clean, build }
+    tasks.withType(PublishToMavenRepository) { it.dependsOn clean, build }
     println("uploading 4 $projectDir")
 
     def isAndroid = project.plugins.findPlugin("com.android.library")
