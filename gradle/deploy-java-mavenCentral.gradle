@@ -38,9 +38,8 @@ if (project.hasProperty("mavenSigningKeyId")) {
     apply plugin: 'signing'
     apply from: "$projectDir/deploy.gradle"
 
-    // 
+    // build the .aar first. can try removing this and manually building if publish fails.
     tasks.withType(PublishToMavenRepository) { it.dependsOn clean, build }
-    println("uploading 4 $projectDir")
 
     def isAndroid = project.plugins.findPlugin("com.android.library")
 
@@ -64,7 +63,6 @@ if (project.hasProperty("mavenSigningKeyId")) {
 
                     from components.java
                 }
-
 
                 // use either ver."$deploy.id" or version
                 def deployVersion = ver."$deploy.id"
