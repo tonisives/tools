@@ -1,45 +1,56 @@
 /*
+
 # MavenCentral and Artifactory release task for a Java/Android library
+
 ## Requirements
+
 * deploy.gradle file in the projectDir:
-ext.deploy = [
-    "siteUrl"           : "site url",
-    "gitUrl"            : "git url",
-    "groupId"           : "package name",
-    "licenseName"       : "MIT",
-    "licenseUrl"        : "https ://opensource.org/licenses/MIT",
-    "id"                : "the package id"
-]
+    ext.deploy = [
+        "siteUrl"           : "site url",
+        "gitUrl"            : "git url",
+        "groupId"           : "package name",
+        "licenseName"       : "MIT",
+        "licenseUrl"        : "https ://opensource.org/licenses/MIT",
+        "id"                : "the package id"
+    ]
+
 * defined ext.ver."$deploy.id" or "version", eg
-version = 1.0
+    version = 1.0
 * ~/.gradle/gradle.properties file with MavenCentral and Artifactory credentials
-mavenSigningKeyId=
-mavenSigningPassword=
-mavenSigningSecretKeyRingFile=
-mavenOssrhUsername=
-mavenOssrhPassword=
-mavenSonatypeStagingProfileId=
-hmArtifactoryUrl=
-hmArtifactoryPublishUser=
-hmArtifactoryPublishPassword=
+    mavenSigningKeyId=
+    mavenSigningPassword=
+    mavenSigningSecretKeyRingFile=
+    mavenOssrhUsername=
+    mavenOssrhPassword=
+    mavenSonatypeStagingProfileId=
+    hmArtifactoryUrl=
+    hmArtifactoryPublishUser=
+    hmArtifactoryPublishPassword=
 * gpg keypair created and uploaded to hkp://pool.sks-keyservers.net
 
-### Release process:
+# Release process:
 
 * update ext.ver values in *all* build.gradle or use -Pversion property
+* build ./gradlew build
 * Call `./gradlew publishReleasePublicationToMavenCentralRepository` to publish to MavenCentral
 * Call `./gradlew publishReleasePublicationToArtifactoryRepository` to publish to release Artifactory
-add -Prepo=gradle-dev-local to dev repo
+add -Prepo=gradle-dev-local to dev repo¸
 * Call `./gradlew publish` to release to both MavenCentral and Artifactory
+
 */
+
+// submodules need version+group in the `withXml { block`
+// use either ver."$deploy.id" or version
+def deployVersion = ver."$deploy.id"
+if (deployVersion == null) deployVersion = project.version
+
+version = deployVersion
+group = deploy.groupId
 
 if (project.hasProperty("mavenSigningKeyId")) {
     apply plugin: "maven-publish"
     apply plugin: 'signing'
     apply from: "$projectDir/deploy.gradle"
-
-    // build the .aar first. can try removing this and manually building if publish fails.
-    tasks.withType(PublishToMavenRepository) { it.dependsOn clean, build }
 
     def isAndroid = project.plugins.findPlugin("com.android.library")
 
@@ -64,20 +75,8 @@ if (project.hasProperty("mavenSigningKeyId")) {
                     from components.java
                 }
 
-                // use either ver."$deploy.id" or version
-                def deployVersion = ver."$deploy.id"
-                if (deployVersion == null) deployVersion = project.version
-
-                // force to use remote dependencies, not local submodules
-                // ------It seems this is not necessary anymore. if include the subproject, then in release pom the correct version is used still 
-                // def runTasks = gradle.startParameter.taskNames.toString()
-                // if (runTasks.contains("publish")) {
-                //     project.rootProject.ext.setProperty("depLocation", 1)
-                // }
-
                 groupId = deploy.groupId
                 artifactId = deploy.id
-                version = deployVersion
 
                 pom {
                     name = deploy.id
@@ -117,7 +116,14 @@ if (project.hasProperty("mavenSigningKeyId")) {
                                     def dependencyNode = dependenciesNode.appendNode('dependency')
                                     dependencyNode.appendNode('groupId', it.group)
                                     dependencyNode.appendNode('artifactId', it.name)
-                                    dependencyNode.appendNode('version', it.version)
+
+                                    if (it.version == "unspecified") {
+                                        throw new GradleException("dependency version is unspecified " +
+                                                "for $deploy.id submodule $it.name, node $it")
+                                    }
+                                    else {
+                                        dependencyNode.appendNode('version', it.version)
+                                    }
                                 }
                             }
                         }
