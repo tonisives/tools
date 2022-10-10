@@ -54,6 +54,13 @@ apply from: "$projectDir/deploy.gradle"
 
 def isAndroid = project.plugins.findPlugin("com.android.library")
 
+// prefer values from gradle.properties, but support env also
+def mavenSigningKeyId = project.hasProperty("mavenSigningKeyId") ? project.mavenSigningKeyId: System.getenv("OSSRH_USERNAME")
+def mavenSigningPassword = project.hasProperty("mavenSigningPassword") ? project.mavenSigningPassword: System.getenv("OSSRH_PASSWORD")
+def mavenSigningSecretKeyRingFile = project.hasProperty("mavenSigningSecretKeyRingFile") ? project.mavenSigningSecretKeyRingFile: System.getenv("MAVEN_SIGNING_KEY_ID")
+def mavenOssrhUsername = project.hasProperty("mavenOssrhUsername") ? project.mavenOssrhUsername: System.getenv("MAVEN_SIGNING_PASSWORD")
+def mavenOssrhPassword = project.hasProperty("mavenOssrhPassword") ? project.mavenOssrhPassword: System.getenv("MAVEN_SIGNING_SECRET_KEY_RING_FILE")
+
 publishing {
     publications {
         release(MavenPublication) {
