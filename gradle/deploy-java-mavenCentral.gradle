@@ -23,19 +23,14 @@
     mavenOssrhUsername=
     mavenOssrhPassword=
     mavenSonatypeStagingProfileId=
-    hmArtifactoryUrl=
-    hmArtifactoryPublishUser=
-    hmArtifactoryPublishPassword=
+
 * gpg keypair created and uploaded to hkp://pool.sks-keyservers.net
 
 # Release process:
 
 * update ext.ver values in *all* build.gradle or use -Pversion property
-* build ./gradlew build
+
 * Call `./gradlew publishReleasePublicationToMavenCentralRepository` to publish to MavenCentral
-* Call `./gradlew publishReleasePublicationToArtifactoryRepository` to publish to release Artifactory
-add -Prepo=gradle-dev-local to dev repo¸
-* Call `./gradlew publish` to release to both MavenCentral and Artifactory
 
 */
 
@@ -133,16 +128,6 @@ if (project.hasProperty("mavenSigningKeyId")) {
         }
 
         repositories {
-            maven {
-                name = 'artifactory'
-                def repoKey = project.hasProperty('repo') ? project.repo : "gradle-release-local"
-                url = "$hmArtifactoryUrl/$repoKey"
-                credentials {
-                    username hmArtifactoryPublishUser
-                    password hmArtifactoryPublishPassword
-                }
-            }
-
             maven {
                 name = 'mavenCentral'
                 url = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
