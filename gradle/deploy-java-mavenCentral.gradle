@@ -22,7 +22,13 @@
     mavenSigningSecretKeyRingFile=
     mavenOssrhUsername=
     mavenOssrhPassword=
-    mavenSonatypeStagingProfileId=
+    OR
+    env variables
+    OSSRH_USERNAME
+    OSSRH_PASSWORD
+    MAVEN_SIGNING_KEY_ID
+    MAVEN_SIGNING_PASSWORD
+    MAVEN_SIGNING_SECRET_KEY_RING_FILE
 
 * gpg keypair created and uploaded to hkp://pool.sks-keyservers.net
 
@@ -42,83 +48,81 @@ if (deployVersion == null) deployVersion = project.version
 version = deployVersion
 group = deploy.groupId
 
-if (project.hasProperty("mavenSigningKeyId")) {
-    apply plugin: "maven-publish"
-    apply plugin: 'signing'
-    apply from: "$projectDir/deploy.gradle"
+apply plugin: "maven-publish"
+apply plugin: 'signing'
+apply from: "$projectDir/deploy.gradle"
 
-    def isAndroid = project.plugins.findPlugin("com.android.library")
+def isAndroid = project.plugins.findPlugin("com.android.library")
 
-    publishing {
-        publications {
-            release(MavenPublication) {
-                // get aar or jar for android/java libs
-                if (isAndroid) {
-                    task sourceJar(type: Jar) {
-                        from android.sourceSets.main.java.srcDirs
-                        classifier "sources"
-                    }
-
-                    artifact(sourceJar)
-                    artifact("$buildDir/outputs/aar/${deploy.id}-release.aar")
-                } else {
-                    java {
-                        withJavadocJar()
-                        withSourcesJar()
-                    }
-
-                    from components.java
+publishing {
+    publications {
+        release(MavenPublication) {
+            // get aar or jar for android/java libs
+            if (isAndroid) {
+                task sourceJar(type: Jar) {
+                    from android.sourceSets.main.java.srcDirs
+                    classifier "sources"
                 }
 
-                groupId = deploy.groupId
-                artifactId = deploy.id
+                artifact(sourceJar)
+                artifact("$buildDir/outputs/aar/${deploy.id}-release.aar")
+            } else {
+                java {
+                    withJavadocJar()
+                    withSourcesJar()
+                }
 
-                pom {
-                    name = deploy.id
+                from components.java
+            }
+
+            groupId = deploy.groupId
+            artifactId = deploy.id
+
+            pom {
+                name = deploy.id
+                url = deploy.siteUrl
+                inceptionYear = '2020'
+                description = deploy.id
+                licenses {
+                    license {
+                        name = deploy.licenseName
+                        url = deploy.licenseUrl
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'tonis'
+                        name = 'Tonis Tiganik'
+                        email = 'ttiganik@high-mobility.com'
+                    }
+                    developer {
+                        id = 'kevin'
+                        name = 'Kevin Valdek'
+                        email = 'kevin@high-mobility.com'
+                    }
+                }
+                scm {
+                    connection = deploy.gitUrl
+                    developerConnection = deploy.gitUrl
                     url = deploy.siteUrl
-                    inceptionYear = '2020'
-                    description = deploy.id
-                    licenses {
-                        license {
-                            name = deploy.licenseName
-                            url = deploy.licenseUrl
-                        }
-                    }
-                    developers {
-                        developer {
-                            id = 'tonis'
-                            name = 'Tonis Tiganik'
-                            email = 'ttiganik@high-mobility.com'
-                        }
-                        developer {
-                            id = 'kevin'
-                            name = 'Kevin Valdek'
-                            email = 'kevin@high-mobility.com'
-                        }
-                    }
-                    scm {
-                        connection = deploy.gitUrl
-                        developerConnection = deploy.gitUrl
-                        url = deploy.siteUrl
-                    }
+                }
 
-                    if (isAndroid) {
-                        // needed for .aar transitive dependencies
-                        withXml {
-                            def dependenciesNode = asNode()['dependencies'][0] ?: asNode().appendNode('dependencies')
-                            configurations.implementation.allDependencies.each {
-                                if (it.name != 'unspecified') {
-                                    def dependencyNode = dependenciesNode.appendNode('dependency')
-                                    dependencyNode.appendNode('groupId', it.group)
-                                    dependencyNode.appendNode('artifactId', it.name)
+                if (isAndroid) {
+                    // needed for .aar transitive dependencies
+                    withXml {
+                        def dependenciesNode = asNode()['dependencies'][0] ?: asNode().appendNode('dependencies')
+                        configurations.implementation.allDependencies.each {
+                            if (it.name != 'unspecified') {
+                                def dependencyNode = dependenciesNode.appendNode('dependency')
+                                dependencyNode.appendNode('groupId', it.group)
+                                dependencyNode.appendNode('artifactId', it.name)
 
-                                    if (it.version == "unspecified") {
-                                        throw new GradleException("dependency version is unspecified " +
-                                                "for $deploy.id submodule $it.name, node $it")
-                                    }
-                                    else {
-                                        dependencyNode.appendNode('version', it.version)
-                                    }
+                                if (it.version == "unspecified") {
+                                    throw new GradleException("dependency version is unspecified " +
+                                            "for $deploy.id submodule $it.name, node $it")
+                                }
+                                else {
+                                    dependencyNode.appendNode('version', it.version)
                                 }
                             }
                         }
@@ -126,26 +130,25 @@ if (project.hasProperty("mavenSigningKeyId")) {
                 }
             }
         }
+    }
 
-        repositories {
-            maven {
-                name = 'mavenCentral'
-                url = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
-                credentials {
-                    username mavenOssrhUsername
-                    password mavenOssrhPassword
-                }
+    repositories {
+        maven {
+            name = 'mavenCentral'
+            url = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
+            credentials {
+                username mavenOssrhUsername
+                password mavenOssrhPassword
             }
         }
     }
-
-    ext["signing.keyId"] = mavenSigningKeyId
-    ext["signing.password"] = mavenSigningPassword
-    ext["signing.secretKeyRingFile"] = mavenSigningSecretKeyRingFile
-
-    signing {
-        sign publishing.publications
-    }
-} else {
-    println("Credentials don't exist for maven publishing")
 }
+
+ext["signing.keyId"] = mavenSigningKeyId
+ext["signing.password"] = mavenSigningPassword
+ext["signing.secretKeyRingFile"] = mavenSigningSecretKeyRingFile
+
+signing {
+    sign publishing.publications
+}
+
