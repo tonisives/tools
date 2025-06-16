@@ -74,4 +74,4 @@ set incsearch
 set hlsearch
 EOL
 
-echo "Installation complete! Please restart your shell or run 'source ~/.bash_profile'"
+echo "Installation complete!"
