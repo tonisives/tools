@@ -1,6 +1,10 @@
 # Vi mode in bash
 set -o vi
 
+export VISUAL=vi
+export EDITOR=vi
+
+
 # Source fzf key bindings if they exist
 [ -f /usr/share/doc/fzf/examples/key-bindings.bash ] && source /usr/share/doc/fzf/examples/key-bindings.bash
 
@@ -33,4 +37,4 @@ export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border'
 export FZF_DEFAULT_COMMAND='find . -type f'
 
 # Source Docker aliases
-[ -f ~/.docker-aliases.sh ] && source ~/.docker-aliases.sh 
+[ -f ~/.docker-aliases.sh ] && source ~/.docker-aliases.sh
