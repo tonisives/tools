@@ -18,17 +18,10 @@ sudo apt-get install -y \
     tree \
     ncdu
 
-echo "Installing Docker aliases..."
-curl -o ~/.docker-aliases.sh https://raw.githubusercontent.com/tonisives/tools/refs/heads/master/shell-setup/docker-aliases.sh
+echo "Cloning scripts and configs"
+git clone https://github.com/tonisives/tools.git .
 
-echo "Installing .vimrc..."
-curl -o ~/.vimrc https://raw.githubusercontent.com/tonisives/tools/refs/heads/master/shell-setup/.vimrc
-
-echo "Installing .bash_profile..."
-curl -o ~/.bash_profile https://raw.githubusercontent.com/tonisives/tools/refs/heads/master/shell-setup/.bash_profile
+echo "Sourcing new .bash_profile..."
 source ~/.bash_profile
-
-echo "Downloading scripts"
-curl -o ~/.vimrc https://raw.githubusercontent.com/tonisives/tools/refs/heads/master/shell-setup/scripts
 
 echo "Installation complete!"
