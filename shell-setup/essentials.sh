@@ -16,7 +16,11 @@ sudo apt-get install -y \
     curl \
     htop \
     tree \
-    ncdu
+    ncdu \
+    locales
+
+sudo locale-gen en_US.UTF-8
+sudo update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
 echo "Cloning scripts and configs"
 git clone --depth 1 --filter=blob:none --sparse https://github.com/tonisives/tools.git
