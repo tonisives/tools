@@ -19,7 +19,14 @@ sudo apt-get install -y \
     ncdu
 
 echo "Cloning scripts and configs"
-git clone https://github.com/tonisives/tools.git .
+git clone --depth 1 --filter=blob:none --sparse https://github.com/tonisives/tools.git
+cd tools
+git sparse-checkout set shell-setup/scripts
+
+cp shell-setup/scripts/.* ~/ 2>/dev/null || true
+cp shell-setup/scripts/* ~/ 2>/dev/null || true
+cd ~
+rm -rf tools
 
 echo "Sourcing new .bash_profile..."
 source ~/.bash_profile
