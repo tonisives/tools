@@ -22,8 +22,8 @@ echo "Cloning scripts and configs"
 git clone --depth 1 --filter=blob:none --sparse https://github.com/tonisives/tools.git
 cd tools
 git sparse-checkout set shell-setup
-
-cp -r shell-setup ~/
+cp -r shell-setup/* ~/
+cp -r shell-setup/.* ~/
 cd ~
 rm -rf tools
 
