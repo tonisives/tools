@@ -23,8 +23,7 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/tonisives/too
 cd tools
 git sparse-checkout set shell-setup
 
-cp shell-setup/.* ~/ 2>/dev/null || true
-cp shell-setup/* ~/ 2>/dev/null || true
+cp -r shell-setup ~/
 cd ~
 rm -rf tools
 
