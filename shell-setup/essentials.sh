@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# curl -O https://raw.githubusercontent.com/tonisives/tools/refs/heads/master/shell-setup/essentials.sh && chmod +x essentials.sh && ./essentials.sh && source ~/.bash_profile
+# curl -O https://raw.githubusercontent.com/tonisives/tools/refs/heads/master/shell-setup/essentials.sh && bash ./essentials.sh && source ~/.bash_profile
 
 # Update package list
 echo "Updating package list..."
