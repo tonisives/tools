@@ -4,6 +4,9 @@ set -o vi
 export VISUAL=vi
 export EDITOR=vi
 
+export LC_ALL=en_US.UTF-8
+export LANG=en_US.UTF-8
+unset LC_CTYPE
 
 # Source fzf key bindings if they exist
 [ -f /usr/share/doc/fzf/examples/key-bindings.bash ] && source /usr/share/doc/fzf/examples/key-bindings.bash

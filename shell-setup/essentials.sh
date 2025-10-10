@@ -19,7 +19,9 @@ sudo apt-get install -y \
     ncdu \
     locales
 
-sudo locale-gen en_US.UTF-8
+echo "Configuring locales..."
+echo "en_US.UTF-8 UTF-8" | sudo tee -a /etc/locale.gen
+sudo locale-gen
 sudo update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
 echo "Cloning scripts and configs"
