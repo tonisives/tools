@@ -28,4 +28,7 @@ echo "Installing .bash_profile..."
 curl -o ~/.bash_profile https://raw.githubusercontent.com/tonisives/tools/refs/heads/master/shell-setup/.bash_profile
 source ~/.bash_profile
 
+echo "Downloading scripts"
+curl -o ~/.vimrc https://raw.githubusercontent.com/tonisives/tools/refs/heads/master/shell-setup/scripts
+
 echo "Installation complete!"
