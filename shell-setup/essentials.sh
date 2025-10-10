@@ -21,10 +21,10 @@ sudo apt-get install -y \
 echo "Cloning scripts and configs"
 git clone --depth 1 --filter=blob:none --sparse https://github.com/tonisives/tools.git
 cd tools
-git sparse-checkout set shell-setup/scripts
+git sparse-checkout set shell-setup
 
-cp shell-setup/scripts/.* ~/ 2>/dev/null || true
-cp shell-setup/scripts/* ~/ 2>/dev/null || true
+cp shell-setup/.* ~/ 2>/dev/null || true
+cp shell-setup/* ~/ 2>/dev/null || true
 cd ~
 rm -rf tools
 
