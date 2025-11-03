@@ -58,19 +58,6 @@ cp -r shell-setup/.* ~
 cd ~
 rm -rf tools
 
-# Create .inputrc if it doesn't exist
-if [ ! -f ~/.inputrc ]; then
-    echo "Creating .inputrc with vi mode settings..."
-    cat > ~/.inputrc <<'EOF'
-set editing-mode vi
-set keymap vi-command
-"b": backward-word
-"w": forward-word
-"e": forward-word
-set keymap vi-insert
-EOF
-fi
-
 echo "Sourcing new .bash_profile..."
 source ~/.bash_profile
 
