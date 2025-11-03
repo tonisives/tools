@@ -30,26 +30,42 @@ else
     SUDO=""
 fi
 
-# Update package list
-if [ "$PKG_MANAGER" != "none" ]; then
+# Update package list and install for apt-get
+if [ "$PKG_MANAGER" = "apt-get" ]; then
     echo "Updating package list..."
     $SUDO $UPDATE_CMD
 
     # Install essential tools
     echo "Installing essential tools..."
-    if [ "$PKG_MANAGER" = "apk" ]; then
-        $SUDO $INSTALL_CMD fzf vim tmux git curl htop tree ncdu
-    else
-        $SUDO $INSTALL_CMD fzf vim tmux git curl htop tree ncdu locales
-    fi
-fi
+    $SUDO DEBIAN_FRONTEND=noninteractive $INSTALL_CMD \
+        fzf \
+        vim \
+        tmux \
+        git \
+        curl \
+        htop \
+        tree \
+        ncdu \
+        locales
 
-# Configure locales (skip for Alpine as it doesn't use glibc)
-if [ "$PKG_MANAGER" = "apt-get" ]; then
     echo "Configuring locales..."
     echo "en_US.UTF-8 UTF-8" | $SUDO tee -a /etc/locale.gen
     $SUDO locale-gen
     $SUDO update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+elif [ "$PKG_MANAGER" = "apk" ]; then
+    echo "Updating package list..."
+    $SUDO $UPDATE_CMD
+
+    # Install essential tools
+    echo "Installing essential tools..."
+    $SUDO $INSTALL_CMD fzf vim tmux git curl htop tree ncdu
+elif [ "$PKG_MANAGER" = "yum" ]; then
+    echo "Updating package list..."
+    $SUDO $UPDATE_CMD
+
+    # Install essential tools
+    echo "Installing essential tools..."
+    $SUDO $INSTALL_CMD fzf vim tmux git curl htop tree ncdu
 fi
 
 echo "Cloning scripts and configs"
