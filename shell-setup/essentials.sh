@@ -2,6 +2,9 @@
 
 # curl -O https://raw.githubusercontent.com/tonisives/tools/refs/heads/master/shell-setup/essentials.sh && bash ./essentials.sh && source ~/.bash_profile
 
+# Set non-interactive mode for apt-get
+export DEBIAN_FRONTEND=noninteractive
+
 # Detect package manager
 if command -v apt-get >/dev/null 2>&1; then
     PKG_MANAGER="apt-get"
