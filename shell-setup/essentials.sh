@@ -35,9 +35,13 @@ if [ "$PKG_MANAGER" = "apt-get" ]; then
     echo "Updating package list..."
     $SUDO $UPDATE_CMD
 
+    # Preconfigure tzdata to avoid interactive prompt
+    echo 'tzdata tzdata/Areas select Etc' | $SUDO debconf-set-selections
+    echo 'tzdata tzdata/Zones/Etc select UTC' | $SUDO debconf-set-selections
+
     # Install essential tools
     echo "Installing essential tools..."
-    $SUDO DEBIAN_FRONTEND=noninteractive $INSTALL_CMD \
+    $SUDO env DEBIAN_FRONTEND=noninteractive $INSTALL_CMD \
         fzf \
         vim \
         tmux \
