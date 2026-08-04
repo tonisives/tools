@@ -1,0 +1,116 @@
+#!/bin/sh
+
+set -u
+
+usage() {
+    printf '%s\n' \
+        'Usage: git-agent-trailers [--pane PANE_ID] [--apply COMMIT_MESSAGE_FILE]' \
+        '' \
+        'Print Git trailers for the current ClawTab agent session.' \
+        'With --apply, add or replace the trailers in a commit message file.'
+}
+
+pane_id=${TMUX_PANE:-}
+message_file=
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --pane)
+            if [ "$#" -lt 2 ]; then
+                usage >&2
+                exit 2
+            fi
+            pane_id=$2
+            shift 2
+            ;;
+        --apply)
+            if [ "$#" -lt 2 ]; then
+                usage >&2
+                exit 2
+            fi
+            message_file=$2
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            printf 'Unknown argument: %s\n' "$1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+if [ -z "$pane_id" ]; then
+    printf 'No tmux pane found. Set TMUX_PANE or pass --pane PANE_ID.\n' >&2
+    exit 1
+fi
+
+if ! command -v cwtctl >/dev/null 2>&1; then
+    printf 'cwtctl is not available in PATH.\n' >&2
+    exit 1
+fi
+
+agent_info=$(cwtctl agent info "$pane_id" 2>/dev/null) || {
+    printf 'No ClawTab agent session found for pane %s.\n' "$pane_id" >&2
+    exit 1
+}
+
+info_value() {
+    printf '%s\n' "$agent_info" | sed -n "s/^$1=//p" | head -n 1
+}
+
+resolved_pane_id=$(info_value pane_id)
+provider=$(info_value provider)
+model_id=$(info_value model_id)
+agent_effort=$(info_value agent_effort)
+session_id=$(info_value session_id)
+
+if [ -z "$session_id" ]; then
+    printf 'ClawTab did not return a session ID for pane %s.\n' "$pane_id" >&2
+    exit 1
+fi
+
+if [ -z "$resolved_pane_id" ]; then
+    resolved_pane_id=$pane_id
+fi
+
+print_trailer() {
+    key=$1
+    value=$2
+    if [ -n "$value" ]; then
+        printf '%s: %s\n' "$key" "$value"
+    fi
+}
+
+apply_trailer() {
+    key=$1
+    value=$2
+    if [ -n "$value" ]; then
+        git interpret-trailers --in-place \
+            --if-exists=replace \
+            --if-missing=add \
+            --trailer "$key: $value" \
+            "$message_file"
+    fi
+}
+
+if [ -n "$message_file" ]; then
+    if [ ! -f "$message_file" ]; then
+        printf 'Commit message file does not exist: %s\n' "$message_file" >&2
+        exit 1
+    fi
+    apply_trailer Agent-Provider "$provider"
+    apply_trailer Agent-Model "$model_id"
+    apply_trailer Agent-Effort "$agent_effort"
+    apply_trailer Agent-Session "$session_id"
+    apply_trailer Agent-Pane "$resolved_pane_id"
+fi
+
+print_trailer Agent-Provider "$provider"
+print_trailer Agent-Model "$model_id"
+print_trailer Agent-Effort "$agent_effort"
+print_trailer Agent-Session "$session_id"
+print_trailer Agent-Pane "$resolved_pane_id"
