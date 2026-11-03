@@ -1,0 +1,557 @@
+#!/usr/bin/env python3
+"""Open and inspect URLs in Google Search Console from bmux."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import time
+from typing import Any
+from urllib.parse import urlparse
+
+try:
+    from google.auth.transport.requests import AuthorizedSession
+    from google.auth.exceptions import GoogleAuthError
+    from google.oauth2 import service_account
+    from requests import RequestException
+except ModuleNotFoundError:
+    # launchd and job runners may put Apple's Python ahead of Homebrew's.
+    runtimes = [
+        os.environ.get("GSCCTL_PYTHON"),
+        "/opt/homebrew/bin/python3",
+        "/usr/local/bin/python3",
+    ]
+    for runtime in dict.fromkeys(runtimes):
+        if not runtime or not Path(runtime).is_file():
+            continue
+        if Path(runtime).resolve() == Path(sys.executable).resolve():
+            continue
+        try:
+            probe = subprocess.run(
+                [runtime, "-c", "import google.auth; import google.oauth2.service_account; import requests"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if probe.returncode == 0:
+            os.execv(runtime, [runtime, str(Path(__file__).resolve()), *sys.argv[1:]])
+    print(
+        "gscctl: Python dependencies google-auth and requests are unavailable. "
+        "Set GSCCTL_PYTHON to a Python executable that has them installed, or run "
+        "uv run --with google-auth --with requests "
+        f"{Path(__file__).resolve()} " + " ".join(sys.argv[1:]),
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+
+
+SCOPES = ["https://www.googleapis.com/auth/webmasters.readonly"]
+SITES_ENDPOINT = "https://www.googleapis.com/webmasters/v3/sites"
+INSPECTION_ENDPOINT = (
+    "https://searchconsole.googleapis.com/v1/urlInspection/index:inspect"
+)
+
+
+class GscctlError(Exception):
+    pass
+
+
+class PropertyNotFound(GscctlError):
+    pass
+
+
+def key_file() -> Path:
+    configured = os.environ.get("GSCCTL_KEY_FILE")
+    candidates = [
+        Path(configured).expanduser() if configured else None,
+        Path.home() / ".claude/skills/gsc/gsc-key.json",
+        Path.home() / "workspace/tgs/automation/bin/gsc-key.json",
+    ]
+    for candidate in candidates:
+        if candidate and candidate.is_file():
+            return candidate
+    raise GscctlError(
+        "No service-account key found; set GSCCTL_KEY_FILE to its path"
+    )
+
+
+def session() -> AuthorizedSession:
+    credentials = service_account.Credentials.from_service_account_file(
+        str(key_file()), scopes=SCOPES
+    )
+    return AuthorizedSession(credentials)
+
+
+def response_json(response: Any, action: str) -> dict[str, Any]:
+    try:
+        payload = response.json()
+    except ValueError as error:
+        raise GscctlError(f"{action} failed with HTTP {response.status_code}") from error
+    if not response.ok:
+        message = payload.get("error", {}).get("message", "unknown API error")
+        raise GscctlError(
+            f"{action} failed with HTTP {response.status_code}: {message}"
+        )
+    return payload
+
+
+def list_properties(client: AuthorizedSession) -> list[str]:
+    response = client.get(SITES_ENDPOINT, timeout=30)
+    payload = response_json(response, "Listing Search Console properties")
+    return sorted(
+        entry["siteUrl"]
+        for entry in payload.get("siteEntry", [])
+        if entry.get("siteUrl")
+        and entry.get("permissionLevel") not in {"siteUnverifiedUser", None}
+    )
+
+
+def validate_url(raw_url: str) -> str:
+    parsed = urlparse(raw_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise GscctlError(f"Expected an absolute HTTP(S) URL: {raw_url}")
+    if parsed.username or parsed.password:
+        raise GscctlError("URLs containing credentials are not supported")
+    return raw_url
+
+
+def property_matches(property_url: str, target_url: str) -> bool:
+    target = urlparse(target_url)
+    target_host = (target.hostname or "").lower().rstrip(".")
+
+    if property_url.startswith("sc-domain:"):
+        domain = property_url.removeprefix("sc-domain:").lower().rstrip(".")
+        return target_host == domain or target_host.endswith(f".{domain}")
+
+    prefix = urlparse(property_url)
+    if not prefix.hostname or prefix.scheme != target.scheme:
+        return False
+    if prefix.hostname.lower().rstrip(".") != target_host:
+        return False
+    prefix_path = prefix.path or "/"
+    target_path = target.path or "/"
+    return target_path == prefix_path.rstrip("/") or target_path.startswith(prefix_path)
+
+
+def select_property(properties: list[str], target_url: str) -> str:
+    matches = [item for item in properties if property_matches(item, target_url)]
+    if not matches:
+        hostname = urlparse(target_url).hostname
+        raise PropertyNotFound(f"No accessible Search Console property covers {hostname}")
+
+    def specificity(item: str) -> tuple[int, int]:
+        return (0 if item.startswith("sc-domain:") else 1, len(item))
+
+    return max(matches, key=specificity)
+
+
+def inspection_link(
+    client: AuthorizedSession, property_url: str, target_url: str
+) -> str:
+    response = client.post(
+        INSPECTION_ENDPOINT,
+        json={
+            "inspectionUrl": target_url,
+            "siteUrl": property_url,
+            "languageCode": "en-US",
+        },
+        timeout=60,
+    )
+    payload = response_json(response, "Inspecting URL")
+    link = payload.get("inspectionResult", {}).get("inspectionResultLink")
+    if not link:
+        raise GscctlError("Search Console returned no inspection result link")
+    return link
+
+
+def bmux_executable() -> str:
+    configured = os.environ.get("GSCCTL_BMUX")
+    candidates = [
+        configured,
+        shutil.which("bmux"),
+        "/Volumes/sam/oss/bmux/public/bin/bmux",
+    ]
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return candidate
+    raise GscctlError(
+        "bmux is required for automated indexing; set GSCCTL_BMUX to its executable"
+    )
+
+
+def bmux(args: list[str]) -> Any:
+    env = os.environ.copy()
+    if env.get("TMUX"):
+        # Let bmux resolve and verify the calling terminal's agent context.
+        env.setdefault("BMUX_AGENT_TYPE", "tmux")
+    result = subprocess.run(
+        [bmux_executable(), *args], text=True, capture_output=True, check=False,
+        env=env,
+    )
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        message = result.stderr.strip() or result.stdout.strip() or "bmux failed"
+        raise GscctlError(f"Could not control bmux: {message}") from error
+    if result.returncode != 0 or not payload.get("ok"):
+        message = payload.get("error") or result.stderr.strip() or "bmux failed"
+        raise GscctlError(f"Could not control bmux: {message}")
+    return payload.get("result")
+
+
+def iter_bmux_panes(sessions: list[dict[str, Any]]):
+    for browser_session in sessions:
+        for window in browser_session.get("windows", []):
+            for pane in window.get("panes", []):
+                yield browser_session, pane
+
+
+def select_bmux_session(sessions: list[dict[str, Any]]) -> dict[str, Any]:
+    preferred_session = os.environ.get("GSCCTL_BMUX_SESSION", "gp")
+    for browser_session in sessions:
+        if browser_session.get("name") == preferred_session:
+            return browser_session
+
+    if not sessions:
+        raise GscctlError("No bmux sessions found; open bmux first")
+
+    names = [str(item.get("name") or item["id"]) for item in sessions]
+    if not sys.stdin.isatty():
+        raise GscctlError(
+            f"No bmux session named {preferred_session!r}; available sessions: "
+            f"{', '.join(names)}. Run in a terminal to choose one or set "
+            "GSCCTL_BMUX_SESSION"
+        )
+
+    print(
+        f"bmux session {preferred_session!r} was not found. Choose a session:",
+        file=sys.stderr,
+    )
+    for number, name in enumerate(names, start=1):
+        print(f"  {number}) {name}", file=sys.stderr)
+
+    while True:
+        print(
+            f"Session [1-{len(sessions)}] (q to cancel): ",
+            end="", file=sys.stderr, flush=True,
+        )
+        try:
+            answer = sys.stdin.readline()
+        except KeyboardInterrupt as error:
+            print(file=sys.stderr)
+            raise GscctlError("bmux session selection cancelled") from error
+        if not answer or answer.strip().lower() == "q":
+            raise GscctlError("bmux session selection cancelled")
+        try:
+            selected = int(answer.strip())
+        except ValueError:
+            selected = 0
+        if 1 <= selected <= len(sessions):
+            return sessions[selected - 1]
+        print(
+            f"Enter a number from 1 to {len(sessions)}, or q to cancel.",
+            file=sys.stderr,
+        )
+
+
+def select_bmux_pane(sessions: list[dict[str, Any]]) -> tuple[str, dict[str, Any]]:
+    browser_session = select_bmux_session(sessions)
+    panes = [pane for _, pane in iter_bmux_panes([browser_session])]
+
+    for pane in panes:
+        try:
+            hostname = bmux(["eval", "-t", str(pane["id"]), "location.hostname"])
+        except GscctlError:
+            continue
+        if hostname == "search.google.com":
+            return str(browser_session["id"]), pane
+
+    if panes:
+        return str(browser_session["id"]), panes[0]
+
+    raise GscctlError(
+        f"No bmux pane found in session {browser_session.get('name')!r}; "
+        "open a pane in that session"
+    )
+
+
+def open_in_bmux(target_url: str) -> tuple[str, str]:
+    sessions = bmux(["list-sessions"])
+    session_id, source_pane = select_bmux_pane(sessions)
+    window = bmux([
+        "new-window", "-t", session_id, "--profile", str(source_pane["profileId"]),
+        "--url", target_url,
+    ])
+    panes = window.get("panes", []) if isinstance(window, dict) else []
+    pane_id = panes[0].get("id") if panes else None
+    window_id = window.get("id") if isinstance(window, dict) else None
+    if not pane_id or not window_id:
+        raise GscctlError("bmux created a window but returned no pane ID")
+    return str(pane_id), str(window_id)
+
+
+def bmux_script(pane_id: str, javascript: str) -> str:
+    result = bmux(["eval", "-t", pane_id, javascript])
+    return result if isinstance(result, str) else json.dumps(result)
+
+
+def close_bmux_window(window_id: str) -> None:
+    try:
+        bmux(["kill-window", "-t", window_id])
+    except GscctlError as error:
+        raise GscctlError(
+            f"Indexing succeeded, but the bmux window could not close: {error}"
+        ) from error
+
+
+def open_in_default_browser(target_url: str) -> None:
+    result = subprocess.run(["open", target_url], capture_output=True, text=True)
+    if result.returncode != 0:
+        message = result.stderr.strip() or "default browser failed to open"
+        raise GscctlError(message)
+
+
+def request_indexing(
+    pane_id: str, timeout: int = 300, reindex: bool = False
+) -> tuple[str, bool]:
+    started = time.monotonic()
+    deadline = time.monotonic() + timeout
+    clicked = False
+    last_state: dict[str, Any] = {}
+    javascript = r'''
+(function () {
+  function clean(value) { return (value || '').replace(/\s+/g, ' ').trim(); }
+  var text = clean(document.body && document.body.innerText);
+  var controls = Array.from(document.querySelectorAll(
+    'button, [role="button"], a[role="button"]'
+  ));
+  var labels = controls.map(function (el) {
+    return clean(el.innerText || el.textContent || el.getAttribute('aria-label'));
+  });
+  var success = [
+    'Indexing requested',
+    'Request submitted',
+    'URL was added to a priority crawl queue',
+    'Page indexing requested'
+  ].find(function (message) { return text.indexOf(message) !== -1; });
+  var failure = [
+    'We had a problem submitting your indexing request',
+    'Quota exceeded',
+    'Could not submit indexing request'
+  ].find(function (message) { return text.indexOf(message) !== -1; });
+  var buttonPattern = /^(request indexing|request again|resubmit|submit for indexing)$/i;
+  var button = controls.find(function (el, index) {
+    return buttonPattern.test(labels[index] || '') &&
+      !el.disabled && el.getAttribute('aria-disabled') !== 'true';
+  });
+  return JSON.stringify({
+    ready: document.readyState === 'complete',
+    clicked: false,
+    success: success || null,
+    failure: failure || null,
+    indexed: /URL is on Google/i.test(text),
+    button: button ? clean(button.innerText || button.textContent ||
+      button.getAttribute('aria-label')) : null,
+    labels: labels.filter(Boolean).slice(0, 80)
+  });
+})()
+'''
+
+    while time.monotonic() < deadline:
+        try:
+            state = json.loads(bmux_script(pane_id, javascript))
+        except (json.JSONDecodeError, GscctlError):
+            time.sleep(2)
+            continue
+        last_state = state
+        if state.get("failure"):
+            raise GscctlError(str(state["failure"]))
+        if state.get("success"):
+            return str(state["success"]), True
+        if state.get("indexed") and not reindex:
+            if state.get("ready"):
+                return "URL is already on Google; no reindex requested", False
+            time.sleep(2)
+            continue
+        if state.get("button") and not clicked:
+            label = json.dumps(state["button"])
+            click_script = f'''
+(function () {{
+  function clean(value) {{ return (value || '').replace(/\\s+/g, ' ').trim(); }}
+  var wanted = {label};
+  var controls = Array.from(document.querySelectorAll(
+    'button, [role="button"], a[role="button"]'
+  ));
+  var button = controls.find(function (el) {{
+    return clean(el.innerText || el.textContent || el.getAttribute('aria-label')) === wanted;
+  }});
+  if (!button) return 'missing';
+  button.click();
+  return 'clicked';
+}})()
+'''
+            if bmux_script(pane_id, click_script) == "clicked":
+                clicked = True
+        elif (
+            state.get("indexed")
+            and state.get("ready")
+            and not clicked
+            and time.monotonic() - started >= 15
+        ):
+            return (
+                "URL is already on Google; no indexing request button is available",
+                False,
+            )
+        time.sleep(2)
+
+    if clicked:
+        raise GscctlError("Timed out waiting for the indexing request to complete")
+    labels = ", ".join(last_state.get("labels", [])[:12])
+    detail = f"; visible controls: {labels}" if labels else ""
+    raise GscctlError(f"Timed out waiting for the indexing request button{detail}")
+
+
+def resolve(target_url: str) -> tuple[str, str]:
+    target_url = validate_url(target_url)
+    client = session()
+    property_url = select_property(list_properties(client), target_url)
+    return property_url, inspection_link(client, property_url, target_url)
+
+
+def resolve_in_bmux(target_url: str) -> tuple[str, str, str, str]:
+    """Inspect using properties available to the signed-in browser account."""
+    pane_id, window_id = open_in_bmux("https://search.google.com/search-console")
+    picker = '[role="button"][aria-label="Search property"]'
+    bmux(["wait", "-t", pane_id, "--selector", picker, "--timeout", "60000"])
+    bmux(["click", "-t", pane_id, "--selector", picker])
+    options = '[role="option"][data-resourceid]'
+    bmux(["wait", "-t", pane_id, "--selector", options])
+    properties = json.loads(bmux_script(pane_id, '''
+JSON.stringify(Array.from(document.querySelectorAll(
+  '[role="option"][data-resourceid]'
+)).map(function (el) { return el.getAttribute('data-resourceid'); }))
+'''))
+    try:
+        property_url = select_property(properties, target_url)
+    except PropertyNotFound as error:
+        raise GscctlError(
+            f"No browser Search Console property covers {urlparse(target_url).hostname}; "
+            "check the signed-in account or GSCCTL_BMUX_SESSION"
+        ) from error
+    bmux_script(pane_id, f'''
+Array.from(document.querySelectorAll('[role="option"][data-resourceid]'))
+  .find(function (el) {{
+    return el.getAttribute('data-resourceid') === {json.dumps(property_url)};
+  }}).click()
+''')
+    bmux([
+        "wait", "-t", pane_id, "--expression",
+        f"new URL(location.href).searchParams.get('resource_id') === {json.dumps(property_url)}",
+        "--timeout", "60000",
+    ])
+    inspection_input = 'input[aria-label^="Inspect any URL"]'
+    bmux(["wait", "-t", pane_id, "--selector", inspection_input])
+    bmux(["type", "-t", pane_id, "--selector", inspection_input, "--text", target_url])
+    bmux(["key", "-t", pane_id, "Enter"])
+    bmux([
+        "wait", "-t", pane_id, "--expression",
+        "location.pathname.endsWith('/inspect') && new URL(location.href).searchParams.has('id')",
+        "--timeout", "60000",
+    ])
+    return property_url, bmux_script(pane_id, "location.href"), pane_id, window_id
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="gscctl",
+        description=(
+            "Open URLs in the matching Google Search Console property, or request "
+            "indexing explicitly."
+        ),
+    )
+    parser.add_argument(
+        "command_or_url",
+        help="open, index, link, properties, or an HTTP(S) URL (equivalent to open)",
+    )
+    parser.add_argument(
+        "url", nargs="?", help="URL for the open, index, or link command"
+    )
+    parser.add_argument(
+        "--reindex",
+        action="store_true",
+        help="with index, request indexing even when the URL is already on Google",
+    )
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    command = args.command_or_url
+
+    if args.reindex and command != "index":
+        raise GscctlError("--reindex is only valid with the index command")
+
+    if command == "properties":
+        if args.url:
+            raise GscctlError("properties does not accept a URL")
+        for property_url in list_properties(session()):
+            print(property_url)
+        return 0
+
+    if command in {"open", "index", "link"}:
+        if not args.url:
+            raise GscctlError(f"{command} requires a URL")
+        target_url = args.url
+    elif command.startswith(("http://", "https://")):
+        if args.url:
+            raise GscctlError("Only one URL can be opened at a time")
+        command = "open"
+        target_url = args.command_or_url
+    else:
+        raise GscctlError(f"Unknown command: {command}")
+
+    target_url = validate_url(target_url)
+    pane_id = window_id = None
+    try:
+        property_url, link = resolve(target_url)
+    except PropertyNotFound:
+        print(
+            "gscctl: Property unavailable to service account; using signed-in bmux account",
+            file=sys.stderr,
+        )
+        property_url, link, pane_id, window_id = resolve_in_bmux(target_url)
+    if command == "link":
+        print(link)
+        if window_id:
+            bmux(["kill-window", "-t", window_id])
+    elif command == "index":
+        if not pane_id:
+            pane_id, window_id = open_in_bmux(link)
+        result, submitted = request_indexing(pane_id, reindex=args.reindex)
+        if submitted:
+            close_bmux_window(window_id)
+        print(f"{target_url} in {property_url}: {result}")
+    else:
+        if not pane_id:
+            try:
+                open_in_bmux(link)
+            except GscctlError:
+                open_in_default_browser(link)
+        print(f"Opened {target_url} in {property_url}")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (GscctlError, GoogleAuthError, RequestException) as error:
+        print(f"gscctl: {error}", file=sys.stderr)
+        raise SystemExit(1)
