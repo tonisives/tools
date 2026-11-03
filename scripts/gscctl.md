@@ -11,14 +11,12 @@ gscctl link https://bmux.cc/articles/bmux-0-1-12/
 gscctl properties
 ```
 
-The service account supplies inspection links when it has property access. If no
-matching property is available to it, `open`, `index`, and `link` use the signed-in
-bmux account's property picker and URL inspection input. `properties` lists only
-service-account properties. Other API errors are reported directly.
+The service account selects a matching property and supplies its inspection link.
+Grant the service account access to each Search Console property before using it.
+`properties` lists the properties accessible to the service account.
 
-The browser fallback uses the `gp` bmux session by default. Set
-`GSCCTL_BMUX_SESSION` to use another authenticated session. `link` closes its
-temporary browser window after printing the inspection link. Successful indexing
+The browser uses the `gp` bmux session by default. Set
+`GSCCTL_BMUX_SESSION` to use another authenticated session. Successful indexing
 requests close their window; failed or already-indexed results leave it open for
 inspection.
 
@@ -26,9 +24,3 @@ Requires Python with `google-auth` and `requests`, a service-account key configu
 through `GSCCTL_KEY_FILE` or the standard local key locations, and bmux with an
 authenticated Search Console profile. Set `GSCCTL_PYTHON` or `GSCCTL_BMUX` to
 override executable discovery.
-
-Run regression checks with a Python that has the dependencies installed:
-
-```sh
-python3 scripts/test_gscctl.py
-```

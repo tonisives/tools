@@ -64,10 +64,6 @@ class GscctlError(Exception):
     pass
 
 
-class PropertyNotFound(GscctlError):
-    pass
-
-
 def key_file() -> Path:
     configured = os.environ.get("GSCCTL_KEY_FILE")
     candidates = [
@@ -145,7 +141,7 @@ def select_property(properties: list[str], target_url: str) -> str:
     matches = [item for item in properties if property_matches(item, target_url)]
     if not matches:
         hostname = urlparse(target_url).hostname
-        raise PropertyNotFound(f"No accessible Search Console property covers {hostname}")
+        raise GscctlError(f"No accessible Search Console property covers {hostname}")
 
     def specificity(item: str) -> tuple[int, int]:
         return (0 if item.startswith("sc-domain:") else 1, len(item))
@@ -426,49 +422,6 @@ def resolve(target_url: str) -> tuple[str, str]:
     return property_url, inspection_link(client, property_url, target_url)
 
 
-def resolve_in_bmux(target_url: str) -> tuple[str, str, str, str]:
-    """Inspect using properties available to the signed-in browser account."""
-    pane_id, window_id = open_in_bmux("https://search.google.com/search-console")
-    picker = '[role="button"][aria-label="Search property"]'
-    bmux(["wait", "-t", pane_id, "--selector", picker, "--timeout", "60000"])
-    bmux(["click", "-t", pane_id, "--selector", picker])
-    options = '[role="option"][data-resourceid]'
-    bmux(["wait", "-t", pane_id, "--selector", options])
-    properties = json.loads(bmux_script(pane_id, '''
-JSON.stringify(Array.from(document.querySelectorAll(
-  '[role="option"][data-resourceid]'
-)).map(function (el) { return el.getAttribute('data-resourceid'); }))
-'''))
-    try:
-        property_url = select_property(properties, target_url)
-    except PropertyNotFound as error:
-        raise GscctlError(
-            f"No browser Search Console property covers {urlparse(target_url).hostname}; "
-            "check the signed-in account or GSCCTL_BMUX_SESSION"
-        ) from error
-    bmux_script(pane_id, f'''
-Array.from(document.querySelectorAll('[role="option"][data-resourceid]'))
-  .find(function (el) {{
-    return el.getAttribute('data-resourceid') === {json.dumps(property_url)};
-  }}).click()
-''')
-    bmux([
-        "wait", "-t", pane_id, "--expression",
-        f"new URL(location.href).searchParams.get('resource_id') === {json.dumps(property_url)}",
-        "--timeout", "60000",
-    ])
-    inspection_input = 'input[aria-label^="Inspect any URL"]'
-    bmux(["wait", "-t", pane_id, "--selector", inspection_input])
-    bmux(["type", "-t", pane_id, "--selector", inspection_input, "--text", target_url])
-    bmux(["key", "-t", pane_id, "Enter"])
-    bmux([
-        "wait", "-t", pane_id, "--expression",
-        "location.pathname.endsWith('/inspect') && new URL(location.href).searchParams.has('id')",
-        "--timeout", "60000",
-    ])
-    return property_url, bmux_script(pane_id, "location.href"), pane_id, window_id
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="gscctl",
@@ -518,33 +471,20 @@ def main() -> int:
     else:
         raise GscctlError(f"Unknown command: {command}")
 
-    target_url = validate_url(target_url)
-    pane_id = window_id = None
-    try:
-        property_url, link = resolve(target_url)
-    except PropertyNotFound:
-        print(
-            "gscctl: Property unavailable to service account; using signed-in bmux account",
-            file=sys.stderr,
-        )
-        property_url, link, pane_id, window_id = resolve_in_bmux(target_url)
+    property_url, link = resolve(target_url)
     if command == "link":
         print(link)
-        if window_id:
-            bmux(["kill-window", "-t", window_id])
     elif command == "index":
-        if not pane_id:
-            pane_id, window_id = open_in_bmux(link)
+        pane_id, window_id = open_in_bmux(link)
         result, submitted = request_indexing(pane_id, reindex=args.reindex)
         if submitted:
             close_bmux_window(window_id)
         print(f"{target_url} in {property_url}: {result}")
     else:
-        if not pane_id:
-            try:
-                open_in_bmux(link)
-            except GscctlError:
-                open_in_default_browser(link)
+        try:
+            open_in_bmux(link)
+        except GscctlError:
+            open_in_default_browser(link)
         print(f"Opened {target_url} in {property_url}")
     return 0
 
