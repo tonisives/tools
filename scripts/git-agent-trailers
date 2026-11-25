@@ -48,12 +48,12 @@ if [ -z "$pane_id" ]; then
     exit 1
 fi
 
-if ! command -v cwtctl >/dev/null 2>&1; then
-    printf 'cwtctl is not available in PATH.\n' >&2
+if ! command -v cwt >/dev/null 2>&1; then
+    printf 'cwt is not available in PATH.\n' >&2
     exit 1
 fi
 
-agent_info=$(cwtctl agent info "$pane_id" 2>/dev/null) || {
+agent_info=$(cwt agent info "$pane_id" 2>/dev/null) || {
     printf 'No ClawTab agent session found for pane %s.\n' "$pane_id" >&2
     exit 1
 }
